@@ -7,6 +7,14 @@
 #include <stdint.h>
 #include <math.h>
 
+#ifdef PLATFORM_GINT
+#include <gint/kmalloc.h>
+#include <string.h>
+#define GINT_ERAM_ARENA "eram"
+#define GINT_ERAM_START 0x8C200000
+#define GINT_ERAM_SIZE  (6 << 20)
+#endif
+
 #include "real_type.h"
 
 #define forEach(type, item, array, count) \
@@ -69,6 +77,7 @@ _val; \
 })
 
 // Safe allocation macros - check for nullptr and abort with file/line info
+#ifndef PLATFORM_GINT
 #define safeMalloc(size) ({ \
     void* _ptr = malloc(size); \
     if (_ptr == nullptr) { \
@@ -77,7 +86,6 @@ _val; \
     } \
     _ptr; \
 })
-
 #define safeCalloc(count, size) ({ \
     void* _ptr = calloc(count, size); \
     if (_ptr == nullptr) { \
@@ -95,6 +103,36 @@ _val; \
     } \
     _ptr; \
 })
+#else
+// Force the usage of the extra RAM arena
+#define safeMalloc(size) ({ \
+    void* _ptr = kmalloc(size, GINT_ERAM_ARENA); \
+    if (_ptr == nullptr) { \
+        fprintf(stderr, "FATAL: malloc(%zu) failed at %s:%d\n", (size_t)(size), __FILE__, __LINE__); \
+        abort(); \
+    } \
+    _ptr; \
+})
+
+
+#define safeCalloc(count, size) ({ \
+    uint32_t _len = (count)*(size); \
+    void *_ptr = safeMalloc(_len); \
+    memset(_ptr, 0, _len); \
+    _ptr; \
+})
+#define safeRealloc(ptr, size) ({ \
+    uint32_t _size = size; \
+    void *_sptr = ptr; \
+    void* _ptr = _sptr == nullptr ? safeMalloc(_size) : krealloc(_sptr, _size); \
+    if (_ptr == nullptr) { \
+        fprintf(stderr, "FATAL: realloc(%zu) failed at %s:%d\n", (size_t)(_size), __FILE__, __LINE__); \
+        abort(); \
+    } \
+    _ptr; \
+})
+#endif
+
 
 #define safeMemalign(alignment, size) ({ \
     void* _ptr = memalign(alignment, size); \

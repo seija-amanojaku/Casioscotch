@@ -7,6 +7,8 @@
 
 #ifdef USE_FLOAT_REALS
 
+#define M_PI 3.1459f
+
 typedef float GMLReal;
 
 #define GMLReal_sin sinf

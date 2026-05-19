@@ -22,7 +22,7 @@ add_compile_definitions(
 )
 
 if(PLATFORM STREQUAL "")
-    message(FATAL_ERROR "PLATFORM is not set! Use -DPLATFORM=glfw (or another supported platform).")
+    message(FATAL_ERROR "PLATFORM is not set! Use -DPLATFORM=gint (there are no other supported platforms).")
 endif()
 
 # Audio backend defaults
@@ -30,6 +30,8 @@ if(AUDIO_BACKEND STREQUAL "")
     if(PLATFORM STREQUAL "web")
         set(AUDIO_BACKEND "web")
     elseif(PLATFORM STREQUAL "web-meta")
+        set(AUDIO_BACKEND "none")
+    elseif(PLATFORM STREQUAL "gint")
         set(AUDIO_BACKEND "none")
     elseif(PLATFORM STREQUAL "ps3")
         set(AUDIO_BACKEND "openal")
@@ -236,6 +238,40 @@ if(PLATFORM STREQUAL "glfw")
             ${CMAKE_SOURCE_DIR}/vendor/gamecontrollerdb.txt
             $<TARGET_FILE_DIR:butterscotch>/gamecontrollerdb.txt
     )
+elseif(PLATFORM STREQUAL "gint")
+    # Typical boiler-plate gint stuff
+    include(GenerateG3A)
+    find_package(Gint 2.9 REQUIRED) # we're at like 2.11 lol
+    include(Fxconv)
+
+    # fxconv asset space
+    set(ASSETS
+      # ...
+    )
+
+    fxconv_declare_assets(${ASSETS} WITH_METADATA)
+
+    # Fun flags I stole!
+    add_compile_definitions(USE_FLOAT_REALS)
+    add_compile_definitions(NO_RVALUE_INT64)
+    add_compile_definitions(PLATFORM_GINT)
+
+    # Software renderer is enabled by default (let's not use gint's draw functions, 
+    # they're limited for what butterscotch does)
+    add_compile_definitions(ENABLE_SW_RENDERER)
+    file(GLOB SWR_SOURCES src/sw/*.c src/image/*.c)
+
+    file(GLOB GINT_SOURCES src/gint/*.c src/gint/main.c)
+
+    target_sources(butterscotch PRIVATE ${SWR_SOURCES})
+    target_include_directories(butterscotch PUBLIC vendor/stb/image)
+    target_include_directories(butterscotch PRIVATE ${CMAKE_SOURCE_DIR}/src/sw ${CMAKE_SOURCE_DIR}/src/gint)
+
+    # For now, let's just assume we're building fot the fx-CG50, with no hopes of anything
+    # else.
+    target_link_libraries(butterscotch Gint::Gint)
+    generate_g3a(TARGET butterscotch OUTPUT "Butterscotch.g3a"
+        NAME "Bscotch" ICONS assets-cg/icon-uns.png assets-cg/icon-sel.png)
 elseif(PLATFORM STREQUAL "sdl")
     option(ENABLE_SW_RENDERER "Enable the software renderer (SDL 1.2 only)" ON)
 

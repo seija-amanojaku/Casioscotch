@@ -20,7 +20,6 @@
 #else
 #include <time.h>
 #endif
-
 static uint64_t nowNanos(void) {
 #if defined(PLATFORM_PS2)
     // kBUSCLK is bus clock ticks per second (~147 MHz).

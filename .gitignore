@@ -1,6 +1,8 @@
 build/
 build_ps2/
 build_ps3/
+build-cg/
+*.g3a
 .gitignore
 .cache
 CMakeUserPresets.json

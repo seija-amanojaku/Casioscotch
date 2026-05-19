@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <bzlib.h>
+//#include <bzlib.h>
 
 #include "stb_image.h"
 
@@ -118,7 +118,10 @@ static uint8_t* decodeQoi(const uint8_t* data, size_t dataSize, int* outW, int* 
 //   bytes 6..7 = height (LE uint16)
 //   bytes 8..11 = uncompressed BZ2 length (LE uint32) -- ONLY when gm2022_5 is true
 //   bytes 8.. (or 12.. if gm2022_5) = raw BZip2 stream, which decompresses into a full "fioq" QOI file.
+#include <gint/exc.h> // TODO: not portable
 static uint8_t* decodeBz2Qoi(const uint8_t* blob, size_t blobSize, bool gm2022_5, int* outW, int* outH) {
+    gint_panic(53);
+#if 0
     size_t headerSize = gm2022_5 ? COMPRESSED_QOI_HEADER_SIZE_NEW : COMPRESSED_QOI_HEADER_SIZE_OLD;
     if (headerSize > blobSize) return nullptr;
 
@@ -142,6 +145,7 @@ static uint8_t* decodeBz2Qoi(const uint8_t* blob, size_t blobSize, bool gm2022_5
     uint8_t* result = decodeQoi(uncompressed, destLen, outW, outH);
     free(uncompressed);
     return result;
+#endif
 }
 
 uint8_t* ImageDecoder_decodeToRgba(const uint8_t* blob, size_t blobSize, bool gm2022_5, int* outW, int* outH) {

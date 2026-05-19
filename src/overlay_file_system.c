@@ -11,7 +11,8 @@
 #include <direct.h>
 #define overlayMkdir(path) _mkdir(path)
 #else
-#define overlayMkdir(path) mkdir((path), 0777)
+#define overlayMkdir(path) 
+
 #endif
 
 // ===[ Helpers ]===
