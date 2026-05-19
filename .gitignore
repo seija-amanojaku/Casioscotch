@@ -1,6 +1,8 @@
 build/
 build_ps2/
 build_ps3/
+build-cg-push/
+build-cp/
 build-cg/
 *.g3a
 .gitignore

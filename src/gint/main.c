@@ -14,6 +14,8 @@
 #include <gint/display.h>
 #include <gint/clock.h>
 #include <gint/rtc.h>
+
+#include <fxCGIO/fxCGIO.h>
 // TODO
 #include "runner_keyboard.h"
 #include "runner.h"
@@ -435,25 +437,7 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
 #endif
 
     //args->dataWinPath = argv[optind];
-    args->dataWinPath = "/bs/data.unx"; // TODO: copy over my Undertale
-    dclear(C_BLACK);
-    dprint(1, 1, C_WHITE, "Loading '%s'", args->dataWinPath);
-    dupdate();
-    getkey();
-    if (hmlen(args->screenshotFrames) > 0 && args->screenshotPattern == nullptr) {
-        fprintf(stderr, "Error: --screenshot-at-frame requires --screenshot to be set\n");
-        exit(1);
-    }
-
-    if (hmlen(args->screenshotSurfacesFrames) > 0 && args->screenshotSurfacesPattern == nullptr) {
-        fprintf(stderr, "Error: --screenshot-surfaces-at-frame requires --screenshot-surfaces to be set\n");
-        exit(1);
-    }
-
-    if (args->headless && args->speedMultiplier != 1.0) {
-        fprintf(stderr, "You can't set the speed multiplier while running in headless mode! Headless mode always run in real time\n");
-        exit(1);
-    }
+    args->dataWinPath = "/data.win"; // TODO: copy over my Undertale
 }
 
 static void freeCommandLineArgs(CommandLineArgs* args) {
@@ -590,10 +574,27 @@ static bool getGintWindowFocus(void *window) {
     (void)window;
     return true;
 }
-void Runner_setNextFrame(uint32_t* framebuffer, int width, int height)
+static GINLINE color_t conv(uint16_t in)
+{
+    register uint16_t r = (in >> (2 * 5)) & 0x1F;
+    register uint16_t g = (in >> (1 * 5)) & 0x1F;
+    register uint16_t b = (in >> (0 * 5)) & 0x1F;
+
+    return C_RGB(r,g,b); // thankfully, C_RGB already thinks in RGB555
+}
+void Runner_setNextFrame(uint16_t* framebuffer, int width, int height)
 {
     // TODO: convert(?) to RGB565 and write a portion of the given FB to the 
     // R61524 controller
+    volatile color_t *DISPLAY = (volatile color_t *) 0xB4000000;
+    r61524_start_frame(0, DWIDTH-1, 0, DHEIGHT-1);
+    for (int y = 0; y < DHEIGHT; y++)
+    {
+        for (int x = 0; x < DWIDTH; x++) {
+            uint16_t fakeass_pixel = framebuffer[x + y * width];
+            *DISPLAY = conv(fakeass_pixel);
+        }
+    }
 }
 
 void saveInputRecording() {
@@ -607,6 +608,14 @@ void saveInputRecording() {
     }
 }
 
+static void GDESTRUCTOR press_any_key_to_end() {
+#ifdef ENABLE_STDOUT
+    printf("Press any key to exit...\n");
+    fflush(stdout);
+#endif
+    getkey();
+}
+
 // ===[ MAIN ]===
 static bool shouldExit = false;
 int main(int argc, char* argv[]) {
@@ -615,6 +624,9 @@ int main(int argc, char* argv[]) {
         .start  = (void *) (GINT_ERAM_START), 
         .end    = (void *) (GINT_ERAM_START + GINT_ERAM_SIZE)
     };
+#ifdef ENABLE_STDOUT
+    fxCGIO_init();
+#endif
 
     kmalloc_init_arena(&external_ram, true);
     kmalloc_add_arena(&external_ram);
@@ -622,7 +634,8 @@ int main(int argc, char* argv[]) {
     CommandLineArgs args;
     parseCommandLineArgs(&args, argc, argv);
 
-    printf("Loading %s...\n", args.dataWinPath);
+    printf("Loading the file %s...\n", args.dataWinPath);
+    fflush(stderr);
 
     DataWin* dataWin = DataWin_parse(
         args.dataWinPath,

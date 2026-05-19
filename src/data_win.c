@@ -747,7 +747,7 @@ static void parseACRV(BinaryReader* reader, DataWin* dw) {
 
     uint32_t version = BinaryReader_readUint32(reader);
     if (version != 1) {
-        fprintf(stderr, "ACRV: unexpected version %u (expected 1)\n", version);
+        fprintf(stdout, "ACRV: unexpected version %u (expected 1)\n", version);
         return;
     }
 
@@ -1534,7 +1534,7 @@ static void readRoomLayers(BinaryReader* reader, DataWin* dw, Room* room) {
                 break;
             }
             default: {
-                fprintf(stderr, "Unsupported Room Layer Type %u\n", layer->type);
+                fprintf(stdout, "Unsupported Room Layer Type %u\n", layer->type);
                 exit(0);
             }
         }
@@ -2114,7 +2114,7 @@ static void parseAUDO(BinaryReader* reader, DataWin* dw) {
 DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
     FILE* file = fopen(filePath, "rb");
     if (!file) {
-        fprintf(stderr, "Failed to open file: %s\n", filePath);
+        fprintf(stdout, "Failed to open file: %s\n", filePath);
         exit(1);
     }
 
@@ -2128,7 +2128,7 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
     fseek(file, 0, SEEK_SET);
 
     if (fileSize <= 0) {
-        fprintf(stderr, "Invalid file size: %ld\n", fileSize);
+        fprintf(stdout, "Invalid file size: %ld\n", fileSize);
         fclose(file);
         exit(1);
     }
@@ -2139,10 +2139,11 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
     BinaryReader reader = BinaryReader_create(file, (size_t) fileSize);
 
     // Validate FORM header
-    char formMagic[4];
-    BinaryReader_readBytes(&reader, formMagic, 4);
+    unsigned char formMagic[64] = { 0 };
+    BinaryReader_readBytes(&reader, formMagic, 64);
     if (memcmp(formMagic, "FORM", 4) != 0) {
-        fprintf(stderr, "Invalid file: expected FORM magic, got '%.4s'\n", formMagic);
+        fprintf(stdout, "Invalid file: expected FORM magic, got '%s' (%02X%02X%02X%02X)\n", formMagic, (uint8_t) formMagic[0], (uint8_t) formMagic[1], (uint8_t) formMagic[2], formMagic[3]);
+        fprintf(stdout, "FTR: program is %d bytes\n", reader.fileSize);
         free(dw);
         fclose(file);
         exit(1);
@@ -2193,7 +2194,7 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
     }
 
     if (!codeExists && options.parseCode) {
-        fprintf(stderr, "CODE chunk does not exist or is empty! This usually means you're loading a YYC game.\n");
+        fprintf(stdout, "CODE chunk does not exist or is empty! This usually means you're loading a YYC game.\n");
         fclose(file);
         exit(1);
     }
@@ -2250,7 +2251,7 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
             chunkBuffer = safeMalloc(chunkLength);
             size_t read = fread(chunkBuffer, 1, chunkLength, reader.file);
             if (read != chunkLength) {
-                fprintf(stderr, "DataWin: short read on chunk %.4s (expected %u, got %zu)\n", chunkName, chunkLength, read);
+                fprintf(stdout, "DataWin: short read on chunk %.4s (expected %u, got %zu)\n", chunkName, chunkLength, read);
                 exit(1);
             }
             BinaryReader_setBuffer(&reader, chunkBuffer, chunkDataStart, chunkLength);

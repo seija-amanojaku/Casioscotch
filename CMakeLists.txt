@@ -242,7 +242,13 @@ elseif(PLATFORM STREQUAL "gint")
     # Typical boiler-plate gint stuff
     include(GenerateG3A)
     find_package(Gint 2.9 REQUIRED) # we're at like 2.11 lol
+    find_package(fxCGIO 1.1 REQUIRED) # we're at like 2.11 lol
     include(Fxconv)
+
+    option(ENABLE_STDOUT "Display stdout" OFF)
+    if(ENABLE_STDOUT)
+        add_compile_definitions(ENABLE_STDOUT)
+    endif()
 
     # fxconv asset space
     set(ASSETS
@@ -270,7 +276,7 @@ elseif(PLATFORM STREQUAL "gint")
 
     # For now, let's just assume we're building fot the fx-CG50, with no hopes of anything
     # else.
-    target_link_libraries(butterscotch Gint::Gint)
+    target_link_libraries(butterscotch Gint::Gint fxCGIO::fxCGIO)
     generate_g3a(TARGET butterscotch OUTPUT "Butterscotch.g3a"
         NAME "Bscotch" ICONS assets-cg/icon-uns.png assets-cg/icon-sel.png)
 elseif(PLATFORM STREQUAL "sdl")
