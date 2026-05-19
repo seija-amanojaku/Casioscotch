@@ -252,6 +252,7 @@ elseif(PLATFORM STREQUAL "gint")
     fxconv_declare_assets(${ASSETS} WITH_METADATA)
 
     # Fun flags I stole!
+    add_compile_definitions(IS_BIG_ENDIAN)
     add_compile_definitions(USE_FLOAT_REALS)
     add_compile_definitions(NO_RVALUE_INT64)
     add_compile_definitions(PLATFORM_GINT)
