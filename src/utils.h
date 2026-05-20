@@ -11,8 +11,8 @@
 #include <gint/kmalloc.h>
 #include <string.h>
 #define GINT_ERAM_ARENA "eram"
-#define GINT_ERAM_START (0x8C200000)
-#define GINT_ERAM_SIZE  (6 << 20)
+#define GINT_ERAM_START (0x8C200000 + (2 << 20))
+#define GINT_ERAM_SIZE  (4 << 20)
 #endif
 
 #include "real_type.h"

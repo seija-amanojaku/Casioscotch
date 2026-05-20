@@ -14,6 +14,7 @@
 #include <gint/display.h>
 #include <gint/clock.h>
 #include <gint/rtc.h>
+#include <gint/dma.h>
 
 #include <fxCGIO/fxCGIO.h>
 // TODO
@@ -460,52 +461,15 @@ static void freeCommandLineArgs(CommandLineArgs* args) {
 
 // ===[ KEYBOARD INPUT ]===
 
-static int32_t SDLKeyToGml(int sdlkey) {
-    // Letters and numbers are the same as GML
-#if 0
-    if (sdlkey >= 'a' && sdlkey <= 'z') return toupper(sdlkey);
-    if (sdlkey >= '0' && sdlkey <= '9') return sdlkey;
-#endif
-    // Special keys need mapping
-    
-    switch (sdlkey) {
-#if 0
-        case SDLK_ESCAPE:    return VK_ESCAPE;
-        case SDLK_RETURN:    return VK_ENTER;
-        case SDLK_TAB:       return VK_TAB;
-        case SDLK_BACKSPACE: return VK_BACKSPACE;
-        case SDLK_SPACE:     return VK_SPACE;
-        case SDLK_LSHIFT:
-        case SDLK_RSHIFT:    return VK_SHIFT;
-        case SDLK_LCTRL:
-        case SDLK_RCTRL:     return VK_CONTROL;
-        case SDLK_LALT:
-        case SDLK_RALT:      return VK_ALT;
-        case SDLK_UP:        return VK_UP;
-        case SDLK_DOWN:      return VK_DOWN;
-        case SDLK_LEFT:      return VK_LEFT;
-        case SDLK_RIGHT:     return VK_RIGHT;
-        case SDLK_F1:        return VK_F1;
-        case SDLK_F2:        return VK_F2;
-        case SDLK_F3:        return VK_F3;
-        case SDLK_F4:        return VK_F4;
-        case SDLK_F5:        return VK_F5;
-        case SDLK_F6:        return VK_F6;
-        case SDLK_F7:        return VK_F7;
-        case SDLK_F8:        return VK_F8;
-        case SDLK_F9:        return VK_F9;
-        case SDLK_F10:       return VK_F10;
-        case SDLK_F11:       return VK_F11;
-        case SDLK_F12:       return VK_F12;
-        case SDLK_INSERT:    return VK_INSERT;
-        case SDLK_DELETE:    return VK_DELETE;
-        case SDLK_HOME:      return VK_HOME;
-        case SDLK_END:       return VK_END;
-        case SDLK_PAGEUP:    return VK_PAGEUP;
-        case SDLK_PAGEDOWN:  return VK_PAGEDOWN;
-#endif
-                             // TODO: provide CASIO keys to VK  (I think there's a project that does this already)
-        default:             return -1; // Unknown
+static int32_t GintKeyToGml(int keycode) {
+
+    switch (keycode)
+    {
+        case KEY_UP: return 'W';
+        case KEY_DOWN: return 'S';
+        case KEY_LEFT: return 'A';
+        case KEY_RIGHT: return 'D';
+        default: return -1;     // TODO
     }
 }
 
@@ -880,30 +844,22 @@ int main(int argc, char* argv[]) {
         RunnerGamepad_beginFrame(runner->gamepads);
 
         // TODO: read keyboard
-#if 0
-        while (SDL_PollEvent(&e)) {
-            switch(e.type) {
-                case SDL_KEYDOWN:
-                    RunnerKeyboard_onKeyDown(runner->keyboard, SDLKeyToGml(e.key.keysym.sym));
-                    break;
-                case SDL_KEYUP:
-                    RunnerKeyboard_onKeyUp(runner->keyboard, SDLKeyToGml(e.key.keysym.sym));
-                    break;
-                case SDL_VIDEORESIZE:
-                    if (useSWRend)
-                        break;
-                    fbWidth = e.resize.w;
-                    fbHeight = e.resize.h;
-                    scr = SDL_SetVideoMode(fbWidth, fbHeight, 0, (useSWRend ? 0 : SDL_OPENGL) | SDL_RESIZABLE);
-                    break;
-                case SDL_QUIT:
-                    shouldExit = true;
-                    break;
-                default:
-                    break;
-            }
+        volatile int one = 1; // ONE DOLLAR!
+        cleareventflips();
+        pollevent();
+        if (keydown(KEY_MENU))
+        {
+            shouldExit = true;
         }
-#endif
+
+        // Poll every keycode, regardless of if it's real or not!!!!!!
+        for (int i = 0; i < 0x100; i++)
+        {
+            if (keypressed(i))
+                RunnerKeyboard_onKeyDown(runner->keyboard, GintKeyToGml(i));
+            if (keyreleased(i))
+                RunnerKeyboard_onKeyUp(runner->keyboard, GintKeyToGml(i));
+        }
 
         // Process input recording/playback (must happen after SDL_PollEvents, before Runner_step)
         InputRecording_processFrame(globalInputRecording, runner->keyboard, runner->frameCount);
@@ -1109,7 +1065,7 @@ int main(int argc, char* argv[]) {
             double remaining = nextFrameTime - (rtc_ticks()/128.0f);
             if (remaining > 0.002) {
                 // TODO: make sure that this is correct
-                sleep_us((long) (remaining * 1e12));
+                //sleep_us((long) (remaining * 1e12));
             }
             lastFrameTime = nextFrameTime;
         } else {
