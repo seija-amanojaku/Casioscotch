@@ -599,7 +599,6 @@ static bool getSDLWindowFocus(void *window) {
 }
 
 static SDL_Surface* nextFb = NULL;
-static uint32_t fbW = 0, fbH = 0;
 void Runner_setNextFrame(uint32_t* framebuffer, int width, int height)
 {
     if (nextFb != NULL) {
@@ -607,8 +606,6 @@ void Runner_setNextFrame(uint32_t* framebuffer, int width, int height)
         nextFb = NULL;
     }
 
-    fbW = width;
-    fbH = height;
     nextFb = SDL_CreateRGBSurfaceFrom(
         framebuffer,
         width,
@@ -648,6 +645,8 @@ static void onCrashSignal(int sig) {
 // ===[ MAIN ]===
 static bool shouldExit = false;
 int main(int argc, char* argv[]) {
+    setbuf(stderr, NULL);
+
     CommandLineArgs args;
     parseCommandLineArgs(&args, argc, argv);
 
@@ -844,7 +843,7 @@ int main(int argc, char* argv[]) {
     fbWidth = reqW;
     fbHeight = reqH;
     if(!args.headless) {
-        scr = SDL_SetVideoMode(reqW, reqH, 0, useSWRend ? 0 : (SDL_OPENGL | SDL_RESIZABLE));
+        scr = SDL_SetVideoMode(fbWidth, fbHeight, 0, useSWRend ? 0 : (SDL_OPENGL | SDL_RESIZABLE));
         if (!scr && useSWRend) {
             SDL_Rect** modes = SDL_ListModes(NULL, SDL_FULLSCREEN);
             if (modes && modes != (SDL_Rect**) -1 && modes[0]) {
@@ -1153,7 +1152,7 @@ int main(int argc, char* argv[]) {
 
         Runner_computeViewDisplayScale(runner, reqW, reqH, &displayScaleX, &displayScaleY);
 
-        renderer->vtable->beginFrame(renderer, reqW, reqH, fbWidth, fbHeight);
+        Runner_beginFrame(runner, reqW, reqH, fbWidth, fbHeight);
 
         // Clear FBO with room background color
         if (runner->drawBackgroundColor) {

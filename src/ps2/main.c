@@ -437,6 +437,9 @@ int main(int argc, char* argv[]) {
     shfree(eagerRooms);
 
     bool bytecodeVersionSupported = false;
+#ifdef ENABLE_BC14
+    if (dataWin->gen8.bytecodeVersion == 13 || dataWin->gen8.bytecodeVersion == 14) bytecodeVersionSupported = true;
+#endif
 #ifdef ENABLE_BC16
     if (dataWin->gen8.bytecodeVersion == 15 || dataWin->gen8.bytecodeVersion == 16) bytecodeVersionSupported = true;
 #endif
@@ -471,7 +474,8 @@ int main(int argc, char* argv[]) {
     // ===[ Initialize Renderer ]===
     PS2Overlay_drawStatusScreen(dataWin->gen8.displayName, "Initializing renderer...", true);
 
-    Renderer* renderer = GsRenderer_create(gsGlobal);
+    int64_t eeAtlasCacheBytes = JsonReader_getInt(JsonReader_getObject(configRoot, "eeAtlasCacheBytes"));
+    Renderer* renderer = GsRenderer_create(gsGlobal, eeAtlasCacheBytes);
 
     // ===[ Initialize Audio System ]===
 #ifdef USE_PS2_AUDIO
@@ -637,7 +641,7 @@ int main(int argc, char* argv[]) {
         gsKit_clear(gsGlobal, GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
 
         Runner_drawPre(runner, 640, 448);
-        renderer->vtable->beginFrame(renderer, gameW, gameH, 640, 448);
+        Runner_beginFrame(runner, gameW, gameH, 640, 448);
 
         // Clear with room background color
         if (runner->drawBackgroundColor) {

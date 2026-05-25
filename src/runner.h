@@ -285,6 +285,13 @@ typedef struct {
     bool isOpen;
 } OpenTextFile;
 
+// Open binary file handle for GML file_bin_* functions.
+#define MAX_OPEN_BINARY_FILES 32
+typedef struct {
+    void* handle; // FileSystem-owned; passed to binaryRead/Write/Seek/etc.
+    bool isOpen;
+} OpenBinaryFile;
+
 // Saved state for persistent rooms. When leaving a persistent room, instance state
 // and visual properties are saved here. When returning, they are restored instead
 // of re-creating from the room definition.
@@ -372,6 +379,9 @@ struct Runner {
     int32_t applicationHeight;
     int32_t oldApplicationWidth;
     int32_t oldApplicationHeight;
+    // ID returned by renderer->vtable->ensureApplicationSurface each frame. Real surface ID on GL/GL-legacy,
+    // APPLICATION_SURFACE_ID (-1) on PS2. This is what BUILTIN_VAR_APPLICATION_SURFACE returns to GML.
+    int32_t applicationSurfaceId;
     void* nativeWindow;
     void (*setWindowTitle)(void* window, const char* title);
     bool (*getWindowSize)(void* window, int32_t* outW, int32_t* outH);
@@ -431,6 +441,7 @@ struct Runner {
 
     // Text file handles for file_text_* functions
     OpenTextFile openTextFiles[MAX_OPEN_TEXT_FILES];
+    OpenBinaryFile openBinaryFiles[MAX_OPEN_BINARY_FILES];
 
     // Async map ID
     int32_t asyncLoadMapId;
@@ -470,6 +481,9 @@ void Runner_setLives(Runner* runner, GMLReal value);
 // Used to fire events when the values are equal to or lesser than 0.
 void Runner_setHealth(Runner* runner, GMLReal value);
 void Runner_draw(Runner* runner);
+// Ensures the application_surface exists at the right size, mirrors the renderer's ID into runner+renderer state, then
+// invokes renderer->vtable->beginFrame. Every platform main should call this instead of beginFrame directly.
+void Runner_beginFrame(Runner* runner, int32_t gameW, int32_t gameH, int32_t windowW, int32_t windowH);
 void Runner_drawGUI(Runner* runner, int32_t windowW, int32_t windowH, int32_t targetW, int32_t targetH);
 void Runner_drawPre(Runner* runner, int32_t windowW, int32_t windowH);
 void Runner_drawPost(Runner* runner, int32_t windowW, int32_t windowH);

@@ -134,6 +134,14 @@ target_include_directories(butterscotch PUBLIC vendor/stb/ds)
 target_sources(butterscotch PRIVATE vendor/md5/md5.c)
 target_include_directories(butterscotch PUBLIC vendor/md5)
 
+# Steve Reid's SHA1 implementation
+target_sources(butterscotch PRIVATE vendor/sha1/sha1.c)
+target_include_directories(butterscotch PUBLIC vendor/sha1)
+
+# Base64 implementation
+target_sources(butterscotch PRIVATE vendor/base64/base64.c)
+target_include_directories(butterscotch PUBLIC vendor/base64)
+
 if(PLATFORM STREQUAL "glfw")
     if (NOT ENABLE_LEGACY_GL AND NOT ENABLE_MODERN_GL)
         message(FATAL_ERROR "GLFW requires at least one GL version!")
@@ -456,7 +464,7 @@ elseif(PLATFORM STREQUAL "ps2")
 
     # Platform identifier for PS2-specific code paths (e.g., scratchpad allocation)
     add_compile_definitions(PLATFORM_PS2)
-    
+
     # PS2 renderer hot path logs
     option(ENABLE_PS2_RENDERER_LOGS "Enable hot path logs in the PS2 renderer" OFF)
     if(ENABLE_PS2_RENDERER_LOGS)
@@ -641,7 +649,7 @@ elseif(PLATFORM STREQUAL "ps3")
     if(ENABLE_VM_STUB_LOGS)
         add_compile_definitions(ENABLE_VM_STUB_LOGS)
     endif()
-    
+
     # stb_image
     target_include_directories(butterscotch PUBLIC vendor/stb/image)
 

@@ -12,10 +12,10 @@ DEFINES := -DENABLE_VM_GML_PROFILER \
 		   -DENABLE_VM_OPCODE_PROFILER \
 		   -DENABLE_VM_STUB_LOGS \
 		   -DENABLE_VM_TRACING
-INCLUDES := -I. -Isrc -Ivendor/stb/ds -Isrc/image -Ivendor/stb/image -Ivendor/stb/vorbis -Ivendor/md5
+INCLUDES := -I. -Isrc -Ivendor/stb/ds -Isrc/image -Ivendor/stb/image -Ivendor/stb/vorbis -Ivendor/md5 -Ivendor/sha1 -Ivendor/base64
 
 HEADERS := $(wildcard src/*.h) $(shell find vendor -name '*.h')
-SRCS := $(wildcard src/*.c) $(wildcard src/image/*.c) vendor/md5/md5.c
+SRCS := $(wildcard src/*.c) $(wildcard src/image/*.c) vendor/md5/md5.c vendor/sha1/sha1.c vendor/base64/base64.c
 
 PLATFORM := glfw
 AUDIO_BACKEND := miniaudio
@@ -183,14 +183,20 @@ endif
 
 OBJS := $(addprefix build/,$(SRCS:.c=.c.o))
 
+ifndef DISABLE_MMD
+DEPFLAGS = -MMD -MP
+endif
+
 all: build/butterscotch
+
+-include $(OBJS:.o=.d)
 
 build/butterscotch: $(OBJS)
 	$(CC) $(LDFLAGS) $(OBJS) $(LIBS) $(EXTRALIBS) -o $@
 
-build/%.c.o: %.c $(HEADERS)
+build/%.c.o: %.c $(if $(DISABLE_MMD),$(HEADERS))
 	@mkdir -p $(dir $@)
-	$(CC) $(DEFINES) $(INCLUDES) $(CFLAGS) -c $< -o $@
+	$(CC) $(DEFINES) $(INCLUDES) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
 
 clean:
 	rm -rf build
