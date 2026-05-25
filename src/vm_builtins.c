@@ -1329,7 +1329,9 @@ static RValue builtin_show_debug_message(MAYBE_UNUSED VMContext* ctx, RValue* ar
     }
 
     char* val = RValue_toString(args[0]);
+#if 0
     printf("Game: %s\n", val);
+#endif
     free(val);
 
     return RValue_makeUndefined();

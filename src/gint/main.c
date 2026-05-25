@@ -13,8 +13,11 @@
 #include <gint/kmalloc.h>
 #include <gint/display.h>
 #include <gint/clock.h>
+#include <gint/prof.h>
 #include <gint/rtc.h>
 #include <gint/dma.h>
+
+#include <fxlibc/printf.h>
 
 #include <fxCGIO/fxCGIO.h>
 // TODO
@@ -546,19 +549,24 @@ static GINLINE color_t conv(uint16_t in)
 
     return C_RGB(r,g,b); // thankfully, C_RGB already thinks in RGB555
 }
+
+static int lastW, lastH;
 void Runner_setNextFrame(uint16_t* framebuffer, int width, int height)
 {
     // TODO: convert(?) to RGB565 and write a portion of the given FB to the 
     // R61524 controller
+#ifndef ENABLE_STDOUT
     volatile color_t *DISPLAY = (volatile color_t *) 0xB4000000;
     r61524_start_frame(0, DWIDTH-1, 0, DHEIGHT-1);
     for (int y = 0; y < DHEIGHT; y++)
     {
         for (int x = 0; x < DWIDTH; x++) {
-            uint16_t fakeass_pixel = framebuffer[x + y * width];
-            *DISPLAY = conv(fakeass_pixel);
+            *DISPLAY = conv(framebuffer[x + y * width]);
         }
     }
+#endif ENABLE_STDOUT
+    lastW = width;
+    lastH = height;
 }
 
 void saveInputRecording() {
@@ -589,6 +597,7 @@ int main(int argc, char* argv[]) {
         .end    = (void *) (GINT_ERAM_START + GINT_ERAM_SIZE)
     };
 #ifdef ENABLE_STDOUT
+    __printf_enable_fp();
     fxCGIO_init();
 #endif
 
@@ -626,7 +635,10 @@ int main(int argc, char* argv[]) {
             .parseFunc = true,
             .parseStrg = true,
             .parseTxtr = true,
-            .parseAudo = true,
+
+            // lol
+            .parseAudo = false,
+
             .skipLoadingPreciseMasksForNonPreciseSprites = true,
             .lazyLoadRooms = args.lazyRooms,
             .eagerlyLoadedRooms = args.eagerRooms
@@ -636,28 +648,23 @@ int main(int argc, char* argv[]) {
     Gen8* gen8 = &dataWin->gen8;
     printf("Loaded \"%s\" (%d) successfully! [Bytecode Version %u / GameMaker version %u.%u.%u.%u]\n", gen8->name, gen8->gameID, gen8->bytecodeVersion, dataWin->detectedFormat.major, dataWin->detectedFormat.minor, dataWin->detectedFormat.release, dataWin->detectedFormat.build);
 
-    #ifdef HAVE_MALLINFO2
     {
-        struct mallinfo2 mi = mallinfo2();
-        printf("Memory after data.win parsing: used=%zu bytes (%.1f KB)\n", mi.uordblks, mi.uordblks / 1024.0f);
+        // This is gint bitch! Get your sensitive ass back to Linux!
+        //struct mallinfo2 mi = mallinfo2();
+        kmalloc_gint_stats_t *mi = kmalloc_get_gint_stats(kmalloc_get_arena(GINT_ERAM_ARENA));
+        printf("Memory after data.win parsing: used=%zu bytes (%.1f KB)\n", mi->used_memory, mi->used_memory / 1024.0f);
+#ifdef ENABLE_STDOUT
+        char *line = NULL;
+        size_t size;
+        getline(&line, &size, stdin);
+        free(line);
+#endif
     }
-    #endif
-
-    // Build window title
-    char windowTitle[256];
-    snprintf(windowTitle, sizeof(windowTitle), "Butterscotch - %s", gen8->displayName);
 
     // Initialize VM
     VMContext* vm = VM_create(dataWin);
 
-    Profiler_setEnabled(&vm->profiler, args.profilerFramesBetween > 0);
-#ifdef ENABLE_VM_OPCODE_PROFILER
-    vm->opcodeProfilerEnabled = args.opcodeProfiler;
-    if (vm->opcodeProfilerEnabled) {
-        vm->opcodeVariantCounts = safeCalloc(256 * 256, sizeof(uint64_t));
-        vm->opcodeRValueTypeCounts = safeCalloc(256 * 256, sizeof(uint64_t));
-    }
-#endif
+    Profiler_setEnabled(&vm->profiler, false); // lol no
 
     if (args.hasSeed) {
         srand((unsigned int) args.seed);
@@ -665,74 +672,6 @@ int main(int argc, char* argv[]) {
         printf("Using fixed RNG seed: %d\n", args.seed);
     }
 
-    if (args.printRooms) {
-        // Under --lazy-rooms we load each room for display and then free it again so the dump
-        // reflects what each room contains without keeping all of them resident simultaneously.
-        forEachIndexed(Room, room, idx, dataWin->room.rooms, dataWin->room.count) {
-            bool loadedHere = false;
-            if (!room->payloadLoaded) {
-                DataWin_loadRoomPayload(dataWin, (int32_t) idx);
-                loadedHere = true;
-            }
-
-            printf("[%d] %s ()\n", idx, room->name);
-
-            forEachIndexed(RoomGameObject, roomGameObject, idx2, room->gameObjects, room->gameObjectCount) {
-                GameObject* gameObject = &dataWin->objt.objects[roomGameObject->objectDefinition];
-                printf(
-                    "  [%d] %s (x=%d,y=%d,persistent=%d,solid=%d,spriteId=%d,preCreateCode=%d,creationCode=%d)\n",
-                    idx2,
-                    gameObject->name,
-                    roomGameObject->x,
-                    roomGameObject->y,
-                    gameObject->persistent,
-                    gameObject->solid,
-                    gameObject->spriteId,
-                    roomGameObject->preCreateCode,
-                    roomGameObject->creationCode
-                );
-            }
-
-            if (loadedHere && !room->eagerlyLoaded) {
-                DataWin_freeRoomPayload(room);
-            }
-        }
-        VM_free(vm);
-        DataWin_free(dataWin);
-        return 0;
-    }
-
-    if (args.printDeclaredFunctions) {
-        repeat(hmlen(vm->codeIndexByName), i) {
-            printf("[%d] %s\n", vm->codeIndexByName[i].value, vm->codeIndexByName[i].key);
-        }
-        VM_free(vm);
-        DataWin_free(dataWin);
-        return 0;
-    }
-
-    if (shlen(args.disassemble) > 0) {
-        VM_buildCrossReferences(vm);
-        if (shgeti(args.disassemble, "*") >= 0) {
-            repeat(dataWin->code.count, i) {
-                VM_disassemble(vm, (int32_t) i);
-            }
-        } else {
-            for (ptrdiff_t i = 0; shlen(args.disassemble) > i; i++) {
-                const char* name = args.disassemble[i].key;
-                ptrdiff_t idx = shgeti(vm->codeIndexByName, (char*) name);
-                if (idx >= 0) {
-                    VM_disassemble(vm, vm->codeIndexByName[idx].value);
-                } else {
-                    fprintf(stderr, "Error: Script '%s' not found in funcMap\n", name);
-                }
-            }
-        }
-        VM_free(vm);
-        DataWin_free(dataWin);
-        freeCommandLineArgs(&args);
-        return 0;
-    }
 
     // Initialize the file system
     char* dataWinDir = nullptr;
@@ -754,27 +693,12 @@ int main(int argc, char* argv[]) {
     OverlayFileSystem* overlayFs = OverlayFileSystem_create(dataWinDir, savePath);
     free(dataWinDir);
 
-    // Init SDL
-#if 0
-    if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_TIMER)) {
-        fprintf(stderr, "Failed to initialize SDL\n");
-        DataWin_free(dataWin);
-        freeCommandLineArgs(&args);
-        return 1;
-    }
-#endif
-
     int reqW = (int) gen8->defaultWindowWidth;
     int reqH = (int) gen8->defaultWindowHeight;
     fbWidth = reqW;
     fbHeight = reqH;
 
     // There are no such things as 'video modes' in Ba Sing Se
-
-    // TODO: change keydev parameters for repeats
-#if 0
-    SDL_EnableKeyRepeat(0, 0);
-#endif
 
     // Initialize the renderer
     Renderer *renderer = SWRenderer_create(fbWidth, fbHeight);
@@ -838,8 +762,15 @@ int main(int argc, char* argv[]) {
     bool debugShowCollisionMasks = false;
     double lastFrameTime = (rtc_ticks()/128.0f);
     //SDL_Event e;
+
+    prof_init();
+    prof_t frametime = prof_make();
     while (!runner->shouldExit && !shouldExit) {
         // Clear last frame's pressed/released state, then poll new input events
+        uint32_t total_frametime = prof_time(frametime);
+
+        frametime = prof_make();
+        prof_enter(frametime);
         RunnerKeyboard_beginFrame(runner->keyboard);
         RunnerGamepad_beginFrame(runner->gamepads);
 
@@ -851,6 +782,8 @@ int main(int argc, char* argv[]) {
         {
             shouldExit = true;
         }
+        kmalloc_gint_stats_t *mi = kmalloc_get_gint_stats(kmalloc_get_arena(GINT_ERAM_ARENA));
+        printf("used=%zu bytes (%.1f KB) (%d x %d) | %d us\n", mi->used_memory, mi->used_memory / 1024.0f, lastW, lastH, total_frametime);
 
         // Poll every keycode, regardless of if it's real or not!!!!!!
         for (int i = 0; i < 0x100; i++)
@@ -1071,6 +1004,7 @@ int main(int argc, char* argv[]) {
         } else {
             lastFrameTime = (rtc_ticks()/128.0f);
         }
+        prof_leave(frametime);
     }
 
     saveInputRecording();

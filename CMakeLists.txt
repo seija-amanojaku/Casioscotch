@@ -276,6 +276,7 @@ elseif(PLATFORM STREQUAL "gint")
 
     # For now, let's just assume we're building fot the fx-CG50, with no hopes of anything
     # else.
+    target_link_options(butterscotch PRIVATE -Os -Wl,--print-memory-usage)
     target_link_libraries(butterscotch Gint::Gint fxCGIO::fxCGIO)
     generate_g3a(TARGET butterscotch OUTPUT "Butterscotch.g3a"
         NAME "Bscotch" ICONS assets-cg/icon-uns.png assets-cg/icon-sel.png)
