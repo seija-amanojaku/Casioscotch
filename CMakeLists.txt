@@ -250,12 +250,22 @@ elseif(PLATFORM STREQUAL "gint")
     # Typical boiler-plate gint stuff
     include(GenerateG3A)
     find_package(Gint 2.9 REQUIRED) # we're at like 2.11 lol
-    find_package(fxCGIO 1.1 REQUIRED) # we're at like 2.11 lol
+    find_package(fxCGIO 1.1 REQUIRED)
     include(Fxconv)
 
     option(ENABLE_STDOUT "Display stdout" OFF)
     if(ENABLE_STDOUT)
+        message(AUTHOR_WARNING "You are enabling stdout/stderr output.")
+        message(AUTHOR_WARNING "This blocks the screen from displaying actual game content!")
         add_compile_definitions(ENABLE_STDOUT)
+    endif()
+
+    # Purposefully cripple our external memory 
+    # should we have to fastload
+    if (CMAKE_BUILD_TYPE STREQUAL "FastLoad")
+        message(AUTHOR_WARNING "You are building in fastload mode.")
+        message(AUTHOR_WARNING "This reduces the external memory available from 6 to 4 MB, be careful!")
+        add_compile_definitions(GINT_FASTLOAD)
     endif()
 
     # fxconv asset space
@@ -284,7 +294,7 @@ elseif(PLATFORM STREQUAL "gint")
 
     # For now, let's just assume we're building fot the fx-CG50, with no hopes of anything
     # else.
-    target_link_options(butterscotch PRIVATE -Os -Wl,--print-memory-usage)
+    target_link_options(butterscotch PRIVATE -O3 -flto -Wl,--print-memory-usage)
     target_link_libraries(butterscotch Gint::Gint fxCGIO::fxCGIO)
     generate_g3a(TARGET butterscotch OUTPUT "Butterscotch.g3a"
         NAME "Bscotch" ICONS assets-cg/icon-uns.png assets-cg/icon-sel.png)

@@ -91,7 +91,7 @@ static void stackPushTyped(VMContext* ctx, RValue val, uint8_t gmlStackType) {
 #define stackPushTyped(ctx, val, gmlStackType) stackPush((ctx), (val))
 #endif
 
-static GILRAM RValue stackPop(VMContext* ctx) {
+static RValue stackPop(VMContext* ctx) {
     require(ctx->stack.top > 0);
     RValue val = ctx->stack.slots[--ctx->stack.top];
 #ifdef ENABLE_VM_TRACING
@@ -4213,7 +4213,7 @@ static void formatInstruction(VMContext* ctx, const uint8_t* bytecodeBase, uint3
     }
 }
 
-GILRAM void VM_buildCrossReferences(VMContext* ctx) {
+void VM_buildCrossReferences(VMContext* ctx) {
     DataWin* dw = ctx->dataWin;
     ctx->crossRefMap = nullptr;
 

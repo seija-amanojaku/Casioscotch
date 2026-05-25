@@ -8,12 +8,20 @@
 #include <math.h>
 
 #ifdef PLATFORM_GINT
+
 #include <gint/kmalloc.h>
 #include <string.h>
+
 #define GINT_ERAM_ARENA "eram"
+
+#ifdef GINT_FASTLOAD
 #define GINT_ERAM_START (0x8C200000 + (2 << 20))
 #define GINT_ERAM_SIZE  (4 << 20)
-#endif
+#else // not GINT_FASTLOAD
+#define GINT_ERAM_START (0x8C200000 + (0 << 20))
+#define GINT_ERAM_SIZE  (6 << 20)
+#endif // GINT_FASTLOAD
+#endif // PLATFORM_GINT
 
 #include "real_type.h"
 

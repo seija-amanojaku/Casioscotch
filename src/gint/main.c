@@ -541,28 +541,26 @@ static bool getGintWindowFocus(void *window) {
     (void)window;
     return true;
 }
-static GINLINE color_t conv(uint16_t in)
-{
-    register uint16_t r = (in >> (2 * 5)) & 0x1F;
-    register uint16_t g = (in >> (1 * 5)) & 0x1F;
-    register uint16_t b = (in >> (0 * 5)) & 0x1F;
-
-    return C_RGB(r,g,b); // thankfully, C_RGB already thinks in RGB555
-}
 
 static int lastW, lastH;
 void Runner_setNextFrame(uint16_t* framebuffer, int width, int height)
 {
-    // TODO: convert(?) to RGB565 and write a portion of the given FB to the 
-    // R61524 controller
 #ifndef ENABLE_STDOUT
+    // The LCD controller lives there
     volatile color_t *DISPLAY = (volatile color_t *) 0xB4000000;
-    r61524_start_frame(0, DWIDTH-1, 0, DHEIGHT-1);
-    for (int y = 0; y < DHEIGHT; y++)
+
+    int offX = width < DWIDTH ? (DWIDTH - width)>>1 : 0;
+    int offY = height < DHEIGHT ? (DHEIGHT - height)>>1 : 0;
+    r61524_start_frame(offX, width-1+offX, offY, height-1+offY); // this surely will not cause issues at high resolutions
+    
+    // Check how much we can transfer per block
+    if (!(((uintptr_t) framebuffer) & 0b11))
     {
-        for (int x = 0; x < DWIDTH; x++) {
-            *DISPLAY = conv(framebuffer[x + y * width]);
-        }
+        dma_transfer_sync(1, DMA_4B, (width * height)>>1, framebuffer, DMA_INC, DISPLAY, DMA_FIXED);
+    }
+    else
+    {
+        dma_transfer_sync(1, DMA_2B, width * height, framebuffer, DMA_INC, DISPLAY, DMA_FIXED);
     }
 #endif ENABLE_STDOUT
     lastW = width;
@@ -782,8 +780,10 @@ int main(int argc, char* argv[]) {
         {
             shouldExit = true;
         }
+#ifdef ENABLE_STDOUT
         kmalloc_gint_stats_t *mi = kmalloc_get_gint_stats(kmalloc_get_arena(GINT_ERAM_ARENA));
         printf("used=%zu bytes (%.1f KB) (%d x %d) | %d us\n", mi->used_memory, mi->used_memory / 1024.0f, lastW, lastH, total_frametime);
+#endif
 
         // Poll every keycode, regardless of if it's real or not!!!!!!
         for (int i = 0; i < 0x100; i++)
