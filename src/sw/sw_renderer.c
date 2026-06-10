@@ -57,7 +57,7 @@ typedef struct
 	bool viewActive;
 	int viewX, viewY, viewW, viewH;
 	int portX, portY, portW, portH;
-	int gameW, gameH, windowW, windowH;
+	int gameW, gameH, maxX, maxY;
 }
 SWRenderer;
 
@@ -224,8 +224,8 @@ FORCE_INLINE int swrCeiling(float x)
 
 static SWTexture* swrCreateTexture(const uint8_t* srcBuffer, int width, int height)
 {
-	SWTexture* txt = safeCalloc(1, sizeof(SWTexture));
-	txt->buffer = safeCalloc(width * height, sizeof(uintpixel_t));
+	SWTexture* txt = safeMalloc(sizeof(SWTexture));
+	txt->buffer = safeMalloc(width * height * sizeof(uintpixel_t));
 	
 	const uint32_t* rgbaSrc = (const uint32_t*) srcBuffer;
 
@@ -353,10 +353,6 @@ static void SWRenderer_init(Renderer* renderer, DataWin* dataWin)
 	
 	renderer->dataWin = dataWin;
 	
-	//allocate frame buffer
-	swr->fb = safeCalloc(swr->width * swr->height, sizeof(uintpixel_t));
-	swr->fbPitch = swr->width;
-	
 	//allocate texture buffer
 	swr->textureCount = dataWin->txtr.count;
 	swr->surfaceCount = SURFACE_MAX_COUNT;
@@ -399,9 +395,16 @@ static void SWRenderer_beginFrame(Renderer* renderer, int32_t gameW, int32_t gam
 	SWRenderer* swr = (SWRenderer*) renderer;
 	swr->gameW = gameW;
 	swr->gameH = gameH;
-	swr->windowW = windowW;
-	swr->windowH = windowH;
 	swr->drawingToSurface = false;
+	if (swr->width != windowW || swr->height != windowH)
+	{
+		//allocate frame buffer
+		free(swr->fb);
+		swr->fb = safeMalloc(windowW * windowH * sizeof(uintpixel_t));
+		swr->fbPitch = windowW;
+		swr->width = windowW;
+		swr->height = windowH;
+	}
 }
 
 // This used to be just one, "endFrame". Not sure what the different is.
@@ -434,14 +437,25 @@ static void SWRenderer_beginView(Renderer* renderer, int32_t viewX, int32_t view
 		UNIMP();
 		xratio = 1.0f;
 		yratio = 1.0f;
+		portX = (int)(portX * xratio);
+		portY = (int)(portY * yratio);
 	}
 	else {
-		xratio = (float) swr->windowW / swr->gameW;
-		yratio = (float) swr->windowH / swr->gameH;
-	}
+		float scaleX = (float) swr->width  / swr->gameW;
+		float scaleY = (float) swr->height / swr->gameH;
+		float scale  = (scaleX < scaleY) ? scaleX : scaleY;
 
-	portX = (int)(portX * xratio);
-	portY = (int)(portY * yratio);
+		int32_t scaledW = (int32_t)(swr->gameW * scale);
+		int32_t scaledH = (int32_t)(swr->gameH * scale);
+		int32_t offsetX = (swr->width  - scaledW) / 2;
+		int32_t offsetY = (swr->height - scaledH) / 2;
+
+		xratio = scale;
+		yratio = scale;
+
+		portX = (int)(portX * xratio) + offsetX;
+		portY = (int)(portY * yratio) + offsetY;
+	}
 	portW = (int)(portW * xratio);
 	portH = (int)(portH * yratio);
 	
@@ -454,6 +468,8 @@ static void SWRenderer_beginView(Renderer* renderer, int32_t viewX, int32_t view
 	swr->portY = portY;
 	swr->portW = portW;
 	swr->portH = portH;
+	swr->maxX = portX + portW;
+	swr->maxY = portY + portH;
 }
 
 static void SWRenderer_endView(Renderer* renderer)
@@ -574,8 +590,8 @@ FORCE_INLINE void swrPlotPixel(Renderer* renderer, int x, int y, uintpixel_t col
 {
 	SWRenderer* swr = (SWRenderer*) renderer;
 	
-	if (x < 0 || y < 0) return;
-	if (x >= swr->width || y >= swr->height) return;
+	if (x < swr->portX || y < swr->portY) return;
+	if (x >= swr->maxX || y >= swr->maxY) return;
 	
 	alphaBlend(&swr->fb[y * swr->fbPitch + x], color, alpha);
 }
@@ -584,10 +600,10 @@ static void swrDrawHLineInt(Renderer* renderer, int dx, int dy, int dw, uintpixe
 {
 	SWRenderer *swr = (SWRenderer*) renderer;
 	
-	if (dy < 0) return;
-	if (dy >= swr->height) return;
-	if (dx < 0) { dw += dx; dx = 0; }
-	if (dx + dw >= swr->width) dw = swr->width - dx;
+	if (dy < swr->portY) return;
+	if (dy >= swr->maxY) return;
+	if (dx < swr->portX) { dw += dx; dx = swr->portX; }
+	if (dx + dw >= swr->maxX) dw = swr->maxX - dx;
 	if (dw <= 0) return;
 	
 #if PIXEL_SIZE == 32
@@ -647,10 +663,10 @@ static void swrDrawVLineInt(Renderer* renderer, int dx, int dy, int dh, uintpixe
 {
 	SWRenderer *swr = (SWRenderer*) renderer;
 	
-	if (dx < 0) return;
-	if (dx >= swr->width) return;
-	if (dy < 0) { dh += dy; dy = 0; }
-	if (dy + dh >= swr->height) dh = swr->height - dy;
+	if (dx < swr->portX) return;
+	if (dx >= swr->maxX) return;
+	if (dy < swr->portY) { dh += dy; dy = swr->portY; }
+	if (dy + dh >= swr->maxY) dh = swr->maxY - dy;
 	if (dh <= 0) return;
 	
 #if PIXEL_SIZE == 32
@@ -882,10 +898,10 @@ static void swrDrawSpriteInternal(
 	if (dw == 0 || dh == 0) return;
 	if (sw == 0) sw = 1;
 	if (sh == 0) sh = 1;
-	if (dx + dw <= 0) return;
-	if (dy + dh <= 0) return;
-	if (dx >= swr->width) return;
-	if (dy >= swr->height) return;
+	if (dx + dw <= swr->portX) return;
+	if (dy + dh <= swr->portY) return;
+	if (dx >= swr->maxX) return;
+	if (dy >= swr->maxY) return;
 	
 	int odw = dw, odh = dh;
 	int osw = sw, osh = sh;
@@ -927,7 +943,7 @@ static void swrDrawSpriteInternal(
 	
 	// tweak these if stuff doesn't look right
 	typedef int32_t fixedp_t;
-	const int fp_prec = 8;
+	const int fp_prec = 14;
 
 	fixedp_t ystep = (sh == dh) ? (1 << fp_prec) : ((fixedp_t) osh << fp_prec) / odh;
 	fixedp_t xstep = (sw == dw) ? (1 << fp_prec) : ((fixedp_t) osw << fp_prec) / odw;
@@ -1054,10 +1070,10 @@ static void swrDrawSpriteRotatedInternal(
 	int maxY = swrCeiling(maxYf);
 	
 	// basic out-of-bound checks
-	if (maxX < 0) return;
-	if (maxY < 0) return;
-	if (minX >= swr->width) return;
-	if (minY >= swr->height) return;
+	if (maxX < swr->portX) return;
+	if (maxY < swr->portY) return;
+	if (minX >= swr->maxX) return;
+	if (minY >= swr->maxY) return;
 	
 	// however, we'll need to clip it against out of bounds first
 	int minXc = minX, minYc = minY, maxXc = maxX, maxYc = maxY;
@@ -1219,10 +1235,6 @@ static void SWRenderer_drawSpritePart(Renderer* renderer, int32_t tpagIndex,
 	
 	if (tpagIndex < 0 || (uint32_t) tpagIndex >= dwin->tpag.count) return;
 	
-	bool flipX = false, flipY = false;
-	if (xscale < 0) flipX = true, xscale = -xscale;
-	if (yscale < 0) flipY = true, yscale = -yscale;
-
 	TexturePageItem* tpag = &dwin->tpag.items[tpagIndex];
 	int16_t pageId = tpag->texturePageId;
 	if (0 > pageId || swr->totalTextureCount <= (uint32_t) pageId) return;
@@ -1237,8 +1249,6 @@ static void SWRenderer_drawSpritePart(Renderer* renderer, int32_t tpagIndex,
 	float dy = y;
 	int dw = swrCeiling(xscale * sw);
 	int dh = swrCeiling(yscale * sh);
-	if (flipX) dx -= dw;
-	if (flipY) dy -= dh;
 	
 	SWTexture* texture = swr->textures[pageId];
 	
@@ -1333,17 +1343,124 @@ static void SWRenderer_drawLine(Renderer* renderer, float x1, float y1, float x2
 	swrDrawLine(renderer, x1, y1, x2, y2, width, colorCvt, colorCvt, alpha);
 }
 
+static void swrDrawTriangleInternal(SWRenderer* swr, int xup, int yup, int xleft, int yleft, int xright, int yright, uint32_t color, int alpha)
+{
+	// Figure out the maximum Y extent of the triangle.
+	// (Note that we know yup is the minimum.)
+	int xmid, ymid, xmid2 = xup, xmax, ymax;
+	if (yleft < yright) {
+		xmax = xright, ymax = yright;
+		xmid = xleft, ymid = yleft;
+		if (yright != yup)
+			xmid2 = xup + (xright - xup) * (ymid - yup) / (yright - yup);
+	} else {
+		xmax = xleft, ymax = yleft;
+		xmid = xright, ymid = yright;
+		if (yleft != yup)
+			xmid2 = xup + (xleft - xup) * (ymid - yup) / (yleft - yup);
+	}
+	
+	for (int y = yup; y <= ymax; y++)
+	{
+		if (y < 0) continue;
+		if (y >= swr->height) break;
+		
+		int x1 = xup, x2 = xup;
+		if (y <= ymid)
+		{
+			// Lines: between up and mid, and between up and max
+			if (ymid != yup)
+				x1 = xup + (xmid - xup) * (y - yup) / (ymid - yup);
+			
+			if (ymid != yup)
+				x2 = xup + (xmid2 - xup) * (y - yup) / (ymid - yup);
+		}
+		else
+		{
+			// Lines: between mid and max, and between up and max
+			if (ymax != yup)
+				x1 = xup + (xmax - xup) * (y - yup) / (ymax - yup);
+			
+			if (ymax != ymid)
+				x2 = xmid + (xmax - xmid) * (y - ymid) / (ymax - ymid);
+		}
+		
+		if (x1 >= x2) {
+			int tmp = x1;
+			x1 = x2;
+			x2 = tmp;
+		}
+		
+		if (x1 < swr->portX) x1 = swr->portX;
+		if (x1 >= swr->maxX) continue;
+		if (x2 < swr->portX) continue;
+		if (x2 >= swr->maxX) x2 = swr->maxX - 1;
+		if (x1 > x2) continue;
+		
+		uintpixel_t* line = &swr->fb[y * swr->width];
+		for (int x = x1; x <= x2; x++) {
+			alphaBlend(&line[x], color, alpha);
+		}
+	}
+}
+
+static void swrDrawTriangle(Renderer* renderer, float x1, float y1, float x2, float y2, float x3, float y3, uint32_t color, float alpha)
+{
+	float xup, yup, xleft, yleft, xright, yright;
+	
+	SWRenderer* swr = (SWRenderer*) renderer;
+	swrTransformPosIfNeeded(swr, &x1, &y1);
+	swrTransformPosIfNeeded(swr, &x2, &y2);
+	swrTransformPosIfNeeded(swr, &x3, &y3);
+	
+	//which vertex is higher?
+	xup = x1, yup = y1;
+	xleft = x2, yleft = y2;
+	xright = x3, yright = y3;
+	if (yup > y2) {
+		xup = x2, yup = y2;
+		xleft = x1, yleft = y1;
+		//xright = x3, yright = y3;
+	}
+	if (yup > y3) {
+		xup = x3, yup = y3;
+		xleft = x1, yleft = y1;
+		xright = x2, yright = y2;
+	}
+	
+	if (xleft > xright) {
+		float tmp = xleft;
+		xleft = xright;
+		xright = tmp;
+		tmp = yleft;
+		yleft = yright;
+		yright = tmp;
+	}
+	
+	swrDrawTriangleInternal(
+		swr,
+		swrFloor(xup), swrFloor(yup),
+		swrFloor(xleft), swrCeiling(yleft),
+		swrFloor(xright), swrCeiling(yright),
+		swrConvertPixel(color),
+		swrIntAlpha(alpha)
+	);
+}
+
 static void SWRenderer_drawTriangle(Renderer* renderer, float x1, float y1, float x2, float y2,
 									float x3, float y3, bool outline)
 {
-	(void)outline;
-	
-	uintpixel_t drawColorCvt = swrConvertPixel(renderer->drawColor);
-	
-	// TODO: draw triangle properly.
-	swrDrawLine(renderer, x1, y1, x2, y2, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
-	swrDrawLine(renderer, x1, y1, x3, y3, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
-	swrDrawLine(renderer, x2, y2, x3, y3, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
+	if (outline)
+	{
+		uintpixel_t drawColorCvt = swrConvertPixel(renderer->drawColor);
+		swrDrawLine(renderer, x1, y1, x2, y2, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
+		swrDrawLine(renderer, x1, y1, x3, y3, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
+		swrDrawLine(renderer, x2, y2, x3, y3, 1, drawColorCvt, drawColorCvt, renderer->drawAlpha);
+	}
+	else
+	{
+		swrDrawTriangle(renderer, x1, y1, x2, y2, x3, y3, renderer->drawColor, renderer->drawAlpha);
+	}
 }
 
 static void SWRenderer_drawLineColor(Renderer* renderer, float x1, float y1, float x2, float y2,
@@ -1866,8 +1983,12 @@ static int32_t SWRenderer_createSpriteFromSurface(Renderer* renderer, int32_t su
 		
 		// in-bounds
 		for (; sx < swr->width && ix < w; sx++, ix++)
+#if PIXEL_SIZE == 8
+			dstline[ix] = srcline[ix];
+#else
 			dstline[ix] = srcline[ix] | TRANSPARENT_MASK;
-		
+#endif
+
 		// right edge
 		for (; ix < w; ix++)
 			dstline[ix] = 0;
@@ -2040,7 +2161,7 @@ void SWRenderer_clearFrameBuffer(Renderer* renderer, uint32_t color)
 	}
 }
 
-Renderer* SWRenderer_create(int windowWidth, int windowHeight)
+Renderer* SWRenderer_create(void)
 {
 	SWRenderer* swr = safeCalloc(1, sizeof(SWRenderer));
 	swr->base.vtable = &swrVtable;
@@ -2050,9 +2171,6 @@ Renderer* SWRenderer_create(int windowWidth, int windowHeight)
 	swr->base.drawHalign = 0;
 	swr->base.drawValign = 0;
 	swr->base.circlePrecision = 24;
-	
-	swr->width = windowWidth;
-	swr->height = windowHeight;
 
 	return (Renderer*) swr;
 }
