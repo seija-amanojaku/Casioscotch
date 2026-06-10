@@ -5,6 +5,7 @@ build-cg-push/
 build-cp/
 build-cg/
 *.g3a
+data.win
 .gitignore
 .cache
 CMakeUserPresets.json

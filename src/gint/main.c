@@ -622,8 +622,6 @@ int main(int argc, char* argv[]) {
             .parsePath = true,
             .parseScpt = true,
             .parseGlob = true,
-            .parseShdr = true,
-            .parseFont = true,
             .parseTmln = true,
             .parseObjt = true,
             .parseRoom = true,
@@ -636,10 +634,12 @@ int main(int argc, char* argv[]) {
 
             // lol
             .parseAudo = false,
+            .parseFont = false,
+            .parseShdr = false,
 
             .skipLoadingPreciseMasksForNonPreciseSprites = true,
-            .lazyLoadRooms = args.lazyRooms,
-            .eagerlyLoadedRooms = args.eagerRooms
+            .lazyLoadRooms = true,
+            .eagerlyLoadedRooms = false
         }
     );
 
@@ -699,7 +699,7 @@ int main(int argc, char* argv[]) {
     // There are no such things as 'video modes' in Ba Sing Se
 
     // Initialize the renderer
-    Renderer *renderer = SWRenderer_create(fbWidth, fbHeight);
+    Renderer *renderer = SWRenderer_create();
 
     // Initialize the audio system
     AudioSystem* audioSystem;
